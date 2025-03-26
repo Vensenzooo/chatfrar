@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Timeline } from '../components/Timeline';
@@ -52,7 +52,7 @@ const Home = () => {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),rgba(255,255,255,0))]" />
         </div>
         
-        <div className="relative z-10 text-center px-4">
+        <motion.div className="relative z-10 text-center px-4" style={{ opacity }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -70,7 +70,7 @@ const Home = () => {
             />
           </h1>
           <p className="text-xl md:text-2xl text-gray-300 mb-8">
-            La plateforme de chat nouvelle génération
+            La plateforme de chat nouvelle generation
           </p>
           <div className="flex gap-4 justify-center">
             <motion.div
@@ -96,7 +96,7 @@ const Home = () => {
               </Link>
             </motion.div>
           </div>
-        </div>
+        </motion.div>
       </section>
 
       {/* Features Section with Spotlight Effect */}
@@ -202,7 +202,7 @@ const Home = () => {
               )}
             </div>
 
-            {/* Chat Input */}
+            {/* Chat Input support Gemini agent */}
             <div className="p-4 border-t border-white/20">
               <div className="flex gap-2">
                 <input
@@ -262,6 +262,18 @@ const Home = () => {
               <h4 className="text-lg font-semibold mb-4">Ressources</h4>
               <ul className="space-y-2">
                 <li>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowChat(true); // Open Gemini support chat
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Support
+                  </a>
+                </li>
+                <li>
                   <a href="#" className="text-gray-400 hover:text-white transition-colors">
                     Documentation
                   </a>
@@ -271,19 +283,14 @@ const Home = () => {
                     API
                   </a>
                 </li>
-                <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                    Support
-                  </a>
-                </li>
               </ul>
             </div>
             <div>
               <h4 className="text-lg font-semibold mb-4">Contact</h4>
               <ul className="space-y-2">
                 <li className="text-gray-400">Email: contact@chatfrar.com</li>
-                <li className="text-gray-400">Téléphone: +33 1 23 45 67 89</li>
-                <li className="text-gray-400">Adresse: Paris, France</li>
+                <li className="text-gray-400">Téléphone: +1 514-576-1564</li>
+                <li className="text-gray-400">Adresse: canada, Montreal</li>
               </ul>
             </div>
           </div>
@@ -315,4 +322,4 @@ const features = [
   },
 ];
 
-export default Home; 
+export default Home;

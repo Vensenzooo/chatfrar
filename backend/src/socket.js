@@ -14,7 +14,7 @@ export function setupSocket(io) {
 
     socket.on('send_message', (messageData) => {
       const roomId = messageData.groupId || `dm_${messageData.senderId}_${messageData.receiverId}`;
-      io.to(roomId).emit('receive_message', messageData);
+      io.to(roomId).emit('receive_message', messageData); // Vérifiez que 'receive_message' est bien émis
     });
 
     socket.on('disconnect', () => {

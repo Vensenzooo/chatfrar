@@ -30,15 +30,15 @@ export function disconnectSocket() {
 }
 
 export function joinChat(chatId: string) {
-  socket?.emit('chat:join', chatId);
+  socket?.emit('join_room', chatId); // Vérifiez que 'join_room' est bien émis
 }
 
 export function leaveChat(chatId: string) {
-  socket?.emit('chat:leave', chatId);
+  socket?.emit('leave_room', chatId); // Vérifiez que 'leave_room' est bien émis
 }
 
 export function sendChatMessage(message: Partial<Message>) {
-  socket?.emit('message:send', message);
+  socket?.emit('send_message', message); // Vérifiez que 'send_message' est bien émis
 }
 
 export function onNewMessage(callback: (message: Message) => void) {

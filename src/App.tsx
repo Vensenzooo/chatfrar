@@ -5,6 +5,9 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Chat from './pages/Chat';
+import Profile from './pages/Profile';
+import GroupProfile from './pages/GroupProfile';
+import { LazyLoadedComponent } from './components/LazyLoadedComponent';
 
 function App() {
   return (
@@ -18,12 +21,40 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           
-          {/* Route protégée pour le chat */}
+          {/* Routes protégées */}
           <Route 
             path="/chat" 
             element={
               <PrivateRoute>
                 <Chat />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <PrivateRoute>
+                <Profile />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/group-profile" 
+            element={
+              <PrivateRoute>
+                <GroupProfile 
+                  group={{ id: '', name: '', members: [], created_by: '' }} // Provide a default group object
+                  onlineUsers={new Set()} // Provide an empty Set for online users
+                  onClose={() => console.log('GroupProfile closed')} // Provide a default onClose handler
+                />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/lazy" 
+            element={
+              <PrivateRoute>
+                <LazyLoadedComponent />
               </PrivateRoute>
             } 
           />

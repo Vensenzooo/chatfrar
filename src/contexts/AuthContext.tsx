@@ -8,6 +8,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => Promise<void>; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,7 +21,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Vérifier la session actuelle
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        setUser(session.user as User);
+        const { id, email, user_metadata } = session.user;
+        setUser({
+          id,
+          email: email || '',
+          username: user_metadata?.username || '',
+          avatar: `https://api.dicebear.com/7.x/avatars/svg?seed=${encodeURIComponent(user_metadata?.username || email || '')}`
+        });
       }
       setLoading(false);
     });
@@ -28,7 +35,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Écouter les changements d'authentification
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        setUser(session.user as User);
+        const { id, email, user_metadata } = session.user;
+        setUser({
+          id,
+          email: email || '',
+          username: user_metadata?.username || '',
+          avatar: `https://api.dicebear.com/7.x/avatars/svg?seed=${encodeURIComponent(user_metadata?.username || email || '')}`
+        });
       } else {
         setUser(null);
       }
@@ -59,8 +72,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const updateUser = async (updates: Partial<User>) => {
+    if (!user) throw new Error('No user is logged in');
+    const { error } = await supabase.from('users').update(updates).eq('id', user.id);
+    if (error) throw error;
+    setUser({ ...user, ...updates });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
@@ -72,4 +92,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}

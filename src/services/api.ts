@@ -262,7 +262,7 @@ export async function uploadFile(file: File): Promise<string> {
     const fileName = `${Math.random()}.${fileExt}`;
     const filePath = `${fileName}`;
 
-    const { error: uploadError, data } = await supabase.storage
+    const { error: uploadError } = await supabase.storage // Removed unused 'data'
       .from('message-images')
       .upload(filePath, file);
 

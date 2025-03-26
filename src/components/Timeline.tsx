@@ -48,7 +48,7 @@ export const Timeline = () => {
     { 
       title: "Semaine 3", 
       content: "Développement de la structure principale du frontend avec React et intégration de Tailwind.", 
-      hours: 30, 
+      hours: 35, 
       issues: "Difficultés avec la configuration de Tailwind et des animations personnalisées.", 
       solutions: "Utilisation de plugins supplémentaires et optimisation du fichier de configuration tailwind.config.js." 
     },
@@ -69,21 +69,21 @@ export const Timeline = () => {
     { 
       title: "Semaine 7", 
       content: "Implémentation du système d'invitation d'amis et de gestion des profils utilisateurs.", 
-      hours: 25, 
+      hours: 30, 
       issues: "Interface utilisateur confuse pour la gestion des invitations et des contacts.", 
       solutions: "Refonte de l'UI avec des tests utilisateurs et amélioration des notifications."
     },
     { 
       title: "Semaine 8", 
       content: "Tests, débogage et optimisation de l'application.", 
-      hours: 30, 
+      hours: 35, 
       issues: "Nombreux bugs d'UI et problèmes de performance sur les appareils mobiles.", 
       solutions: "Optimisation du code avec React.memo et useCallback, implémentation du lazy loading."
     },
     { 
       title: "Semaine 9", 
       content: "Finalisation du projet et préparation pour la présentation finale.", 
-      hours: 30, 
+      hours: 40, 
       issues: "Stress de dernière minute et découverte de bugs mineurs.", 
       solutions: "Révision complète et résolution systématique avec une checklist détaillée."
     }
@@ -102,8 +102,8 @@ export const Timeline = () => {
   };
 
   const calculateProgress = (cumHours: number) => {
-    const totalRequiredHours = 100;
-    return Math.min(100, (cumHours / totalRequiredHours) * 100).toFixed(1);
+    const totalRequiredHours = 250;
+    return Math.min(250, (cumHours / totalRequiredHours) * 100).toFixed(1);
   };
 
   return (
@@ -174,7 +174,7 @@ export const Timeline = () => {
                         <div className="flex flex-col">
                           <div className="flex justify-between text-sm mb-1">
                             <span>Cette phase: {item.hours} heures</span>
-                            <span>Cumulatif: {cumulativeHours[index]} heures sur 100 heures</span>
+                            <span>Cumulatif: {cumulativeHours[index]} heures sur 250 heures</span>
                           </div>
                           <div className="h-4 w-full bg-gray-800 rounded-full overflow-hidden">
                             <motion.div

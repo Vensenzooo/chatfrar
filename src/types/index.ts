@@ -39,4 +39,10 @@ export interface Group {
 
 export interface GroupMember extends User {
   is_admin: boolean;
+  joined_at?: string; // Added joined_at
+}
+
+export interface UserWithGroupMetadata extends User {
+  joined_at?: string;
+  is_admin?: boolean;
 }

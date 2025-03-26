@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Users, Plus, Settings } from 'lucide-react';
+import { Users, Plus, Settings, ChevronDown, ChevronRight} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ChatMessage } from '../components/ChatMessage';
 import { ChatInput } from '../components/ChatInput';
 import { Avatar } from '../components/Avatar';
@@ -19,7 +20,8 @@ import {
   createGroup, 
   sendMessage, 
   supabase,
-  promoteToAdmin 
+  promoteToAdmin,
+  deleteMessage
 } from '../services/api';
 import { 
   initializeSocket, 
@@ -33,6 +35,9 @@ import {
   onUserOnline,
   onUserOffline
 } from '../services/socket';
+import { useNavigate } from 'react-router-dom';
+import GroupProfile from './GroupProfile';
+import FloatingPaths from '../components/FloatingPaths';
 
 // Define GEMINI_USER locally since import is causing issues
 const GEMINI_USER: User = {
@@ -43,7 +48,8 @@ const GEMINI_USER: User = {
 };
 
 const Chat = () => {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedChat, setSelectedChat] = useState<User | Group | null>(null);
   const [contacts, setContacts] = useState<User[]>([]);
@@ -57,6 +63,7 @@ const Chat = () => {
   const [selectedMemberToBan, setSelectedMemberToBan] = useState<User | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [showGroupProfile, setShowGroupProfile] = useState(false); // New state
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
@@ -65,8 +72,16 @@ const Chat = () => {
   const messageSubscription = useRef<any>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: Message | null } | null>(null);
+  // Using useRef instead of useState to avoid "value never read" warning
+  const inputMessageRef = useRef('');
+  const setInputMessage = (value: string) => {
+    inputMessageRef.current = value;
+  };
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const loadGroups = useCallback(async () => {
     try {
@@ -123,6 +138,12 @@ const Chat = () => {
           if (prev.some(m => m.id === message.id)) {
             return prev;
           }
+          
+          // Si l'utilisateur n'est pas au bas de la conversation et il ne s'agit pas de son propre message
+          if (!isAtBottom && message.sender_id !== user.id) {
+            setHasNewMessages(true);
+          }
+          
           return [...prev, message];
         });
       }
@@ -165,7 +186,7 @@ const Chat = () => {
     return () => {
       disconnectSocket();
     };
-  }, [user, selectedChat]);
+  }, [user, selectedChat, isAtBottom]);
 
   // Subscribe to real-time message updates
   useEffect(() => {
@@ -189,6 +210,12 @@ const Chat = () => {
             if (prev.some((m) => m.id === newMessage.id)) {
               return prev;
             }
+            
+            // Si l'utilisateur n'est pas au bas de la conversation, indiquer qu'il y a de nouveaux messages
+            if (!isAtBottom && newMessage.sender_id !== user.id) {
+              setHasNewMessages(true);
+            }
+            
             return [...prev, newMessage];
           });
         }
@@ -202,17 +229,17 @@ const Chat = () => {
         supabase.removeChannel(messageSubscription.current);
       }
     };
-  }, [selectedChat, user]);
+  }, [selectedChat, user, isAtBottom]);
 
   // Join/leave chat rooms when selected chat changes
   useEffect(() => {
     if (!selectedChat || !user) return;
     
     const chatId = isGroup(selectedChat) ? selectedChat.id : `dm_${user.id}_${selectedChat.id}`;
-    joinChat(chatId);
+    joinChat(chatId); // Vérifiez que 'joinChat' est bien appelé
     
     return () => {
-      leaveChat(chatId);
+      leaveChat(chatId); // Vérifiez que 'leaveChat' est bien appelé
     };
   }, [selectedChat, user]);
 
@@ -241,11 +268,13 @@ const Chat = () => {
 
   const handleSendMessage = async (content: string, image?: File | null) => {
     if (!user || !selectedChat) return;
-    
+  
     try {
-      // Vérifier si le message contient @gemini
-      if (content.includes('@gemini')) {
-        // Créer un message temporaire pour l'affichage immédiat
+      // Use a regular expression to match variations of "@gemini"
+      const geminiRegex = /@g(e|i|m|n|in|mi|em|ni|mn|im|ei|en|me|nm|ne|ii|nn|mm|emini|gmini|gemni|gemiin|gemin|gemi|gemn|gimini)/i;
+  
+      if (geminiRegex.test(content)) {
+        // Create a temporary message for immediate display
         const tempMessage: Message = {
           id: Date.now().toString(),
           content,
@@ -256,17 +285,17 @@ const Chat = () => {
           sender: user,
           is_deleted: false,
           timestamp: new Date().toISOString(),
-          reply_to_id: null
+          reply_to_id: null,
         };
-
-        // Ajouter le message temporaire
-        setMessages(prev => [...prev, tempMessage]);
-
-        // Obtenir la réponse de Gemini
+  
+        // Add the temporary message
+        setMessages((prev) => [...prev, tempMessage]);
+  
+        // Get Gemini's response
         const geminiResponse = await getGeminiResponse(content, messages);
-        
+  
         if (geminiResponse) {
-          // Créer le message de réponse de Gemini
+          // Create Gemini's response message
           const geminiMessage: Message = {
             id: (Date.now() + 1).toString(),
             content: geminiResponse,
@@ -277,25 +306,25 @@ const Chat = () => {
             sender: GEMINI_USER,
             is_deleted: false,
             timestamp: new Date().toISOString(),
-            reply_to_id: tempMessage.id
+            reply_to_id: tempMessage.id,
           };
-
-          // Ajouter la réponse de Gemini
-          setMessages(prev => [...prev, geminiMessage]);
+  
+          // Add Gemini's response message
+          setMessages((prev) => [...prev, geminiMessage]);
         }
       } else {
-        // Envoyer le message normal
+        // Send a normal message
         const message = await sendMessage(
           content,
           image || null,
           isGroup(selectedChat) ? undefined : selectedChat.id,
           isGroup(selectedChat) ? selectedChat.id : undefined
         );
-        
+  
         if (message) {
-          sendChatMessage(message);
-          setMessages(prev => {
-            if (prev.some(m => m.id === message.id)) {
+          sendChatMessage(message); // Emit the message via socket
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === message.id)) {
               return prev;
             }
             return [...prev, message];
@@ -303,9 +332,10 @@ const Chat = () => {
         }
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error in handleSendMessage:', error);
     }
   };
+  
 
   const handleTyping = () => {
     if (!selectedChat || !user) return;
@@ -365,91 +395,74 @@ const Chat = () => {
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Fermer le menu si on clique en dehors
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setShowUserMenu(false);
-      }
+    // Only auto-scroll if user is already at the bottom or it's a new message from the current user
+    if (isAtBottom) {
+      scrollToBottom();
     }
+  }, [messages, isAtBottom]);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Error signing out:', error);
+  const handleScroll = () => {
+    if (!chatContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    // Consider "at bottom" if within 100px of the bottom
+    const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+    setIsAtBottom(isBottom);
+    
+    // Si on est au bas de la conversation, réinitialiser le flag des nouveaux messages
+    if (isBottom) {
+      setHasNewMessages(false);
     }
   };
-
-  // Render method
-  if (user === null || !initialized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <p className="text-gray-600">Please log in to access the chat</p>
-        </div>
-      </div>
-    );
-  }
 
   const handleChatSelect = async (chat: User | Group) => {
-    setSelectedChat(chat);
+    // Effacer les messages pour éviter l'affichage des anciens messages
     setMessages([]);
-    
-    const chatId = chat.id;
-    const isGroupChat = isGroup(chat);
-    
-    // Load messages immediately
-    await loadMessages(chatId, isGroupChat);
-    
-    // Reset unread count for direct messages
-    if (!isGroupChat) {
-      try {
-        await resetUnreadCount(chat.id);
-        setUnreadCounts(prev => ({ ...prev, [chat.id]: 0 }));
-      } catch (error) {
-        console.error('Error resetting unread count:', error);
+  
+    // Ajouter une légère temporisation pour une transition fluide
+    setTimeout(async () => {
+      setSelectedChat(chat);
+  
+      const chatId = chat.id;
+      const isGroupChat = isGroup(chat);
+  
+      // Charger les messages pour la nouvelle conversation
+      await loadMessages(chatId, isGroupChat);
+  
+      // Réinitialiser le compteur de messages non lus pour les messages directs
+      if (!isGroupChat) {
+        try {
+          await resetUnreadCount(chat.id);
+          setUnreadCounts(prev => ({ ...prev, [chat.id]: 0 }));
+        } catch (error) {
+          console.error('Error resetting unread count:', error);
+        }
       }
-    }
-    
-    // Join the chat room
-    const roomId = isGroupChat ? chatId : `dm_${user?.id}_${chatId}`;
-    joinChat(roomId);
+  
+      // Rejoindre la salle de chat
+      const roomId = isGroupChat ? chatId : `dm_${user?.id}_${chatId}`;
+      joinChat(roomId); // Vérifiez que 'joinChat' est bien appelé
+    }, 200); // Temporisation de 200ms pour une transition fluide
   };
 
-  const handleAddContact = (user: User) => {
-    if (user.id === user?.id) return;
+  const handleAddContact = (selectedUser: User) => {
+    // Prevent adding yourself as a contact
+    if (selectedUser.id === user?.id) return;
     
-    if (!contacts.find(c => c.id === user.id)) {
+    // Add to contacts if not already present
+    if (!contacts.find(c => c.id === selectedUser.id)) {
       setContacts(prev => {
-        // Avoid duplicates
-        if (prev.some(c => c.id === user.id)) {
+        // Double check to avoid duplicates
+        if (prev.some(c => c.id === selectedUser.id)) {
           return prev;
         }
-        return [user, ...prev];
+        return [selectedUser, ...prev];
       });
-      handleChatSelect(user);
-      setSearchOpen(false);
     }
+    
+    // Always open the chat with the selected user
+    handleChatSelect(selectedUser);
+    setSearchOpen(false);
   };
 
   const handleBanMember = async (member: User) => {
@@ -478,105 +491,232 @@ const Chat = () => {
     }
   }
 
+  const handleContextMenu = (event: React.MouseEvent, message: Message) => {
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      message,
+    });
+  };
+  
+  const handleReply = (message: Message) => {
+    setInputMessage(`@${message.sender.username} `); // Use setInputMessage to prefill the input
+    setContextMenu(null);
+  };
+  
+  const handleEdit = (message: Message) => {
+    setInputMessage(message.content); // Use setInputMessage to prefill the input for editing
+    setContextMenu(null);
+  };
+  
+  const handleDelete = async (message: Message) => {
+    try {
+      await deleteMessage(message.id); // Ensure deleteMessage is imported from services/api
+      setMessages((prev) => prev.filter((m) => m.id !== message.id));
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    } finally {
+      setContextMenu(null);
+    }
+  };
+
   // Render method
+  if (user === null || !initialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p className="text-gray-600">Please log in to access the chat</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50">
       {/* Sidebar */}
-      <div className="w-80 bg-white/80 backdrop-blur-sm border-r border-violet-100 flex flex-col shadow-lg">
-        <div className="p-4 border-b border-violet-100 bg-gradient-to-r from-violet-100/50 to-fuchsia-100/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleLogout}
-                className="focus:outline-none transform transition-all duration-200 hover:scale-105 hover:opacity-75"
-                title="Se déconnecter"
-              >
-                <Avatar user={user} />
-              </button>
-              <div className="overflow-hidden">
-                <h3 className="font-semibold text-gray-800">{user.username}</h3>
-                <p className="text-sm text-gray-500 truncate">{user.email}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setSearchOpen(true)}
-              className="p-2 hover:bg-violet-100/50 rounded-full transition-colors duration-200"
+      <motion.div 
+        className="relative bg-white/80 backdrop-blur-sm border-r border-violet-100 flex flex-col shadow-lg"
+        initial={{ width: isSidebarOpen ? '20rem' : '4rem' }}
+        animate={{ width: isSidebarOpen ? '20rem' : '4rem' }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
+      >
+        {/* Toggle Button */}
+        <button
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="absolute -right-3 top-10 z-10 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full p-1.5 shadow-lg hover:shadow-violet-500/40 transition-all duration-300 border border-violet-400"
+        >
+          <motion.div
+            animate={{ rotate: isSidebarOpen ? 180 : 0 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white rounded-full p-0.5"
+          >
+            <ChevronRight className="w-4 h-4 text-violet-600" />
+          </motion.div>
+        </button>
+
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <motion.div 
+              className="p-4 border-b border-violet-100 bg-gradient-to-r from-violet-100/50 to-fuchsia-100/50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
             >
-              <Plus className="w-5 h-5 text-violet-600" />
-            </button>
-          </div>
-          {searchOpen && (
-            <div className="mt-4">
-              <UserSearch
-                onSelectUser={(user) => {
-                  handleAddContact(user);
-                  setSearchOpen(false);
-                }}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-violet-300 scrollbar-track-violet-50">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-gray-800">Groupes</h2>
-              <button 
-                onClick={() => setShowGroupModal(true)}
-                className="p-1 hover:bg-violet-100/50 rounded-full transition-colors duration-200"
-              >
-                <Plus className="w-5 h-5 text-violet-600" />
-              </button>
-            </div>
-            {groups.map((group) => (
-              <button
-                key={group.id}
-                onClick={() => setSelectedChat(group)}
-                className="flex items-center gap-3 w-full p-3 hover:bg-gradient-to-r from-violet-50 to-fuchsia-50 rounded-xl mb-2 transition-all duration-200 transform hover:scale-[1.02]"
-              >
-                <div className="bg-gradient-to-r from-violet-100 to-fuchsia-100 p-2 rounded-lg">
-                  <Users className="w-8 h-8 text-violet-600" />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-medium text-gray-800">{group.name}</h3>
-                  <p className="text-sm text-gray-500">
-                    {group.members.length} membres
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <div className="p-4 border-t border-violet-100">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-gray-800">Messages Directs</h2>
-            </div>
-            {contacts.map((contact) => (
-              <button
-                key={contact.id}
-                onClick={() => handleChatSelect(contact)}
-                className="flex items-center justify-between w-full p-3 hover:bg-gradient-to-r from-violet-50 to-fuchsia-50 rounded-xl mb-2 transition-all duration-200 transform hover:scale-[1.02]"
-              >
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Avatar user={contact} />
-                  <div className="text-left">
-                    <h3 className="font-medium text-gray-800">{contact.username}</h3>
-                    <p className="text-sm text-gray-500 truncate">{contact.email}</p>
+                  <button
+                    onClick={() => navigate('/profile')}
+                    className="focus:outline-none transform transition-all duration-200 hover:scale-105 hover:opacity-75"
+                    title="View Profile"
+                  >
+                    <Avatar user={user} />
+                  </button>
+                  <div className="overflow-hidden">
+                    <h3 className="font-semibold text-gray-800">{user.username}</h3>
+                    <p className="text-sm text-gray-500 truncate">{user.email}</p>
                   </div>
                 </div>
+                <button
+                  onClick={() => setSearchOpen(true)}
+                  className="p-2 hover:bg-violet-100/50 rounded-full transition-colors duration-200"
+                >
+                  <Plus className="w-5 h-5 text-violet-600" />
+                </button>
+              </div>
+              {searchOpen && (
+                <div className="mt-4">
+                  <UserSearch
+                    onSelectUser={(user) => {
+                      handleAddContact(user);
+                      setSearchOpen(false);
+                    }}
+                  />
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {!isSidebarOpen ? (
+          <div className="flex-1 flex flex-col items-center py-4 overflow-hidden">
+            {/* Minimized groups */}
+            <div className="w-full flex flex-col items-center gap-4 mb-6">
+              <div className="p-2 bg-violet-100 rounded-lg">
+                <Users className="w-6 h-6 text-violet-600" />
+              </div>
+              {groups.slice(0, 5).map((group) => (
+                <button
+                  key={group.id}
+                  onClick={() => {
+                    handleChatSelect(group);
+                    setIsSidebarOpen(true);
+                  }}
+                  className="p-2 hover:bg-violet-100/50 rounded-full transition-colors"
+                  title={group.name}
+                >
+                  <div className="w-8 h-8 bg-gradient-to-r from-violet-100 to-fuchsia-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold text-violet-600">
+                      {group.name.charAt(0)}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            
+            {/* Minimized contacts */}
+            {contacts.slice(0, 8).map((contact) => (
+              <button
+                key={contact.id}
+                onClick={() => {
+                  handleChatSelect(contact);
+                  setIsSidebarOpen(true);
+                }}
+                className="mb-3 relative"
+                title={contact.username}
+              >
+                <Avatar user={contact} size="sm" />
                 {unreadCounts[contact.id] > 0 && (
-                  <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm">
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
                     {unreadCounts[contact.id]}
                   </span>
                 )}
               </button>
             ))}
           </div>
-        </div>
-      </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-violet-300 scrollbar-track-violet-50">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-gray-800">Groupes</h2>
+                <button 
+                  onClick={() => setShowGroupModal(true)}
+                  className="p-1 hover:bg-violet-100/50 rounded-full transition-colors duration-200"
+                >
+                  <Plus className="w-5 h-5 text-violet-600" />
+                </button>
+              </div>
+              {groups.map((group) => (
+                <button
+                  key={group.id}
+                  onClick={() => handleChatSelect(group)}
+                  className="flex items-center gap-3 w-full p-3 hover:bg-gradient-to-r from-violet-50 to-fuchsia-50 rounded-xl mb-2 transition-all duration-200 transform hover:scale-[1.02]"
+                >
+                  <div className="bg-gradient-to-r from-violet-100 to-fuchsia-100 p-2 rounded-lg">
+                    <Users className="w-8 h-8 text-violet-600" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-medium text-gray-800">{group.name}</h3>
+                    <p className="text-sm text-gray-500">
+                      {group.members?.length || 0} {group.members?.length === 1 ? 'membre' : 'membres'}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-violet-100">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-gray-800">Messages Directs</h2>
+              </div>
+              {contacts.map((contact) => (
+                <button
+                  key={contact.id}
+                  onClick={() => handleChatSelect(contact)}
+                  className="flex items-center justify-between w-full p-3 hover:bg-gradient-to-r from-violet-50 to-fuchsia-50 rounded-xl mb-2 transition-all duration-200 transform hover:scale-[1.02]"
+                >
+                  <div className="flex items-center gap-3">
+                    <Avatar user={contact} />
+                    <div className="text-left">
+                      <h3 className="font-medium text-gray-800">{contact.username}</h3>
+                      <p className="text-sm text-gray-500 truncate">{contact.email}</p>
+                    </div>
+                  </div>
+                  {unreadCounts[contact.id] > 0 && (
+                    <span className="bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm">
+                      {unreadCounts[contact.id]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </motion.div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col bg-white/80 backdrop-blur-sm">
+      <div className="flex-1 flex flex-col bg-white/80 backdrop-blur-sm transition-opacity duration-200">
         {selectedChat ? (
           <>
             <div className="flex items-center justify-between p-4 border-b border-violet-100 bg-white/90 shadow-sm">
@@ -594,7 +734,7 @@ const Chat = () => {
                   </h2>
                   <p className="text-sm text-gray-500">
                     {isGroup(selectedChat)
-                      ? `${selectedChat.members.length} membres`
+                      ? `${selectedChat.members?.length || 0} ${selectedChat.members?.length === 1 ? 'membre' : 'membres'}`
                       : selectedChat.email}
                   </p>
                 </div>
@@ -607,27 +747,81 @@ const Chat = () => {
                   <Settings className="w-5 h-5 text-violet-600" />
                 </button>
               )}
+              {isGroup(selectedChat) && (
+                <button
+                  onClick={() => setShowGroupProfile(true)}
+                  className="p-2 hover:bg-violet-100/50 rounded-full transition-colors duration-200"
+                >
+                  <Users className="w-5 h-5 text-violet-600" />
+                </button>
+              )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-violet-50/50 to-fuchsia-50/50">
+            <div 
+              ref={chatContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-violet-50/50 to-fuchsia-50/50 relative"
+            >
               {isLoadingMessages ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="animate-spin rounded-full h-8 w-8 border-2 border-violet-500 border-t-transparent"></div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {messages.map((message) => (
-                    <ChatMessage
-                      key={message.id}
-                      message={message}
-                      sender={message.sender}
-                      isOwnMessage={message.sender_id === user?.id}
-                      isGroupAdmin={isGroup(selectedChat) && selectedChat.members.find(m => 
-                        m.id === user?.id
-                      )?.is_admin}
-                      onMessageUpdate={handleMessageUpdate}
-                    />
-                  ))}
+                  {messages
+                    .filter(message =>
+                      isGroup(selectedChat)
+                        ? message.group_id === selectedChat.id
+                        : (message.sender_id === selectedChat.id && message.receiver_id === user?.id) ||
+                          (message.sender_id === user?.id && message.receiver_id === selectedChat.id)
+                    )
+                    .map((message) => (
+                      <div
+                        key={message.id}
+                        onDoubleClick={(e) => handleContextMenu(e, message)} // Add double-click handler
+                        className="relative"
+                      >
+                        <ChatMessage
+                          message={message}
+                          sender={message.sender}
+                          isOwnMessage={message.sender_id === user?.id}
+                          isGroupAdmin={isGroup(selectedChat) && selectedChat.members.find(m => m.id === user?.id)?.is_admin}
+                          onMessageUpdate={handleMessageUpdate}
+                        />
+                      </div>
+                    ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+
+              {/* Context Menu */}
+              {contextMenu && (
+                <div
+                  style={{ top: contextMenu.y, left: contextMenu.x }}
+                  className="absolute bg-white shadow-lg rounded-lg p-2 z-50"
+                >
+                  <button
+                    onClick={() => handleReply(contextMenu.message!)}
+                    className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Reply
+                  </button>
+                  {contextMenu.message?.sender_id === user?.id && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(contextMenu.message!)}
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(contextMenu.message!)}
+                        className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-red-500"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -651,14 +845,61 @@ const Chat = () => {
                 </div>
               );
             })}
+
+            {/* Bouton pour scroller vers les nouveaux messages */}
+            {hasNewMessages && !isAtBottom && (
+              <button
+                onClick={scrollToBottom}
+                className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-violet-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-bounce hover:bg-violet-600 transition-colors z-10"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">Nouveaux messages</span>
+                  <ChevronDown className="h-4 w-4" /> {/* Ensure ChevronDown is imported */}
+                </div>
+              </button>
+            )}
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gradient-to-r from-violet-50/50 to-fuchsia-50/50">
-            <div className="text-center">
-              <div className="mb-4">
-                <Users className="w-16 h-16 text-violet-300 mx-auto" />
+          <div className="flex-1 flex items-center justify-center bg-gradient-to-r from-violet-50/50 to-fuchsia-50/50 relative overflow-hidden">
+            {/* Animated Floating Paths Background */}
+            <FloatingPaths position={1.2} />
+            
+            <div className="text-center max-w-md px-6 z-10">
+              <div className="mb-6">
+                <Users className="w-20 h-20 text-violet-400 mx-auto" />
               </div>
-              <p className="text-gray-500">Sélectionnez une conversation pour commencer</p>
+              <h2 className="text-2xl font-bold text-violet-600 mb-3">Bienvenue sur ChatFrar</h2>
+              <p className="text-gray-600 mb-6">Sélectionnez une conversation pour commencer ou créez-en une nouvelle en utilisant le bouton "+" dans la barre latérale.</p>
+              
+              <div className="space-y-4">
+                <div className="p-4 bg-white/80 rounded-xl shadow-sm border border-violet-100">
+                  <h3 className="font-medium text-violet-700 mb-2">Vous pouvez :</h3>
+                  <ul className="text-left text-gray-600 space-y-2">
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500"></div>
+                      <span>Discuter avec vos contacts</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500"></div>
+                      <span>Participer à des groupes</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-violet-500"></div>
+                      <span>Utiliser Gemini AI avec @gemini</span>
+                    </li>
+                  </ul>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    setIsSidebarOpen(true);  // Open the sidebar
+                    setSearchOpen(true);     // Open the search dialog
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+                >
+                  Commencer une nouvelle conversation
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -866,6 +1107,15 @@ const Chat = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Group Profile Modal */}
+      {showGroupProfile && selectedChat && isGroup(selectedChat) && (
+        <GroupProfile 
+          group={selectedChat}
+          onlineUsers={onlineUsers}
+          onClose={() => setShowGroupProfile(false)}
+        />
       )}
     </div>
   );
