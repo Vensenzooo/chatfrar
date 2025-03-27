@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Timeline } from '../components/Timeline';
 import { TextGenerateEffect } from '../components/ui/TextGenerateEffect';
 import { MessageSquare, X, Send, Sparkles, Shield, Zap } from 'lucide-react';
 import { getGeminiResponse } from '../services/gemini';
 import BackgroundAudio from '../components/BackgroundAudio';
+import { LinkPreview } from '../components/ui/link-preview'; // Import the LinkPreview component
 
 const Home = () => {
   const [showChat, setShowChat] = useState(false);
@@ -14,6 +15,7 @@ const Home = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { scrollYProgress } = useScroll();
   const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
+  const [activeFeature, setActiveFeature] = useState<number | null>(null);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
@@ -37,6 +39,12 @@ const Home = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFeatureDoubleClick = (index: number) => {
+    setActiveFeature(index);
+    // Reset the animation after it completes
+    setTimeout(() => setActiveFeature(null), 1500);
   };
 
   return (
@@ -113,9 +121,34 @@ const Home = () => {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.2 }}
-                className="group relative bg-gray-900/50 backdrop-blur-sm p-6 rounded-xl border border-gray-800 hover:border-purple-500/50 transition-all duration-300"
+                onDoubleClick={() => handleFeatureDoubleClick(index)}
+                className="group relative bg-gray-900/50 backdrop-blur-sm p-6 rounded-xl border border-gray-800 hover:border-purple-500/50 transition-all duration-300 cursor-pointer"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                
+                {/* Animation that appears on double-click */}
+                <AnimatePresence>
+                  {activeFeature === index && (
+                    <motion.div
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ 
+                        scale: [1, 1.2, 1], 
+                        opacity: [0.7, 1, 0],
+                        rotate: [0, 5, -5, 0]
+                      }}
+                      transition={{ 
+                        duration: 1.2,
+                        times: [0, 0.5, 1]
+                      }}
+                      className="absolute inset-0 bg-gradient-to-r from-violet-600/20 to-fuchsia-600/20 rounded-xl z-0 flex items-center justify-center"
+                    >
+                      <div className="text-white font-bold text-4xl opacity-50">
+                        {index === 0 ? "⚡" : index === 1 ? "🔒" : "✨"}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
                 <div className="relative z-10">
                   <div className="text-purple-500 mb-4">{feature.icon}</div>
                   <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
@@ -242,19 +275,34 @@ const Home = () => {
               <h4 className="text-lg font-semibold mb-4">Liens Rapides</h4>
               <ul className="space-y-2">
                 <li>
-                  <Link to="/" className="text-gray-400 hover:text-white transition-colors">
-                    Accueil
-                  </Link>
+                  <LinkPreview 
+                    url="https://chatversion-final-c10137aea-vensenzooos-projects.vercel.app/?_vercel_share=CTpOMSgFioBxRzRl5DpxgpnevTYuBhvx/" 
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <Link to="/" className="text-gray-400 hover:text-white transition-colors">
+                      Accueil
+                    </Link>
+                  </LinkPreview>
                 </li>
                 <li>
-                  <Link to="/login" className="text-gray-400 hover:text-white transition-colors">
-                    Connexion
-                  </Link>
+                  <LinkPreview 
+                    url="https://chatversion-final-c10137aea-vensenzooos-projects.vercel.app/?_vercel_share=CTpOMSgFioBxRzRl5DpxgpnevTYuBhvx/login" 
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <Link to="/login" className="text-gray-400 hover:text-white transition-colors">
+                      Connexion
+                    </Link>
+                  </LinkPreview>
                 </li>
                 <li>
-                  <Link to="/signup" className="text-gray-400 hover:text-white transition-colors">
-                    Inscription
-                  </Link>
+                  <LinkPreview 
+                    url="https://chatversion-final-c10137aea-vensenzooos-projects.vercel.app/?_vercel_share=CTpOMSgFioBxRzRl5DpxgpnevTYuBhvx/signup" 
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <Link to="/signup" className="text-gray-400 hover:text-white transition-colors">
+                      Inscription
+                    </Link>
+                  </LinkPreview>
                 </li>
               </ul>
             </div>
@@ -263,34 +311,60 @@ const Home = () => {
               <ul className="space-y-2">
                 <li>
                   <a
-                    href="#"
                     onClick={(e) => {
                       e.preventDefault();
                       setShowChat(true); // Open Gemini support chat
                     }}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="text-gray-400 hover:text-white transition-colors cursor-pointer"
                   >
                     Support
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                  <LinkPreview 
+                    url="https://developer.mozilla.org/fr/docs/Web"
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
                     Documentation
-                  </a>
+                  </LinkPreview>
                 </li>
                 <li>
-                  <a href="#" className="text-gray-400 hover:text-white transition-colors">
+                  <LinkPreview 
+                    url="https://github.com/features/copilot" 
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
                     API
-                  </a>
+                  </LinkPreview>
                 </li>
               </ul>
             </div>
             <div>
-              <h4 className="text-lg font-semibold mb-4">Contact</h4>
+              <h4 className="text-lg font-semibold mb-4">Technologies</h4>
               <ul className="space-y-2">
-                <li className="text-gray-400">Email: contact@chatfrar.com</li>
-                <li className="text-gray-400">Téléphone: +1 514-576-1564</li>
-                <li className="text-gray-400">Adresse: canada, Montreal</li>
+                <li>
+                  <LinkPreview 
+                    url="https://react.dev" 
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    React
+                  </LinkPreview>
+                </li>
+                <li>
+                  <LinkPreview 
+                    url="https://www.framer.com/motion/" 
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Framer Motion
+                  </LinkPreview>
+                </li>
+                <li>
+                  <LinkPreview 
+                    url="https://supabase.com/" 
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Supabase
+                  </LinkPreview>
+                </li>
               </ul>
             </div>
           </div>

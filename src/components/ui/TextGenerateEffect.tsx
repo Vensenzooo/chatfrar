@@ -30,7 +30,7 @@ export const TextGenerateEffect: React.FC<TextGenerateEffectProps> = ({
 
   return (
     <motion.span
-      className={className}
+      className={`${className} ${filter ? 'filtered-text' : ''}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}

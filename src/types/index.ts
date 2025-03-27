@@ -27,6 +27,7 @@ export interface Message {
   is_deleted: boolean;
   is_read?: boolean;
   receiver?: User;
+  edited_at?: string;
 }
 
 export interface Group {

@@ -596,7 +596,7 @@ const Chat = () => {
                 </button>
               </div>
               {searchOpen && (
-                <div className="mt-4">
+                <div className="mt-4 bg-white shadow-lg rounded-lg p-4 z-20">
                   <UserSearch
                     onSelectUser={(user) => {
                       handleAddContact(user);

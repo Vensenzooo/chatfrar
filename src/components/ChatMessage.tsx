@@ -1,10 +1,17 @@
-import React from 'react';
+// React is automatically imported by the JSX transform
 import { Message, User } from '../types';
 import { Avatar } from './Avatar';
 import { formatDistanceToNow } from '../utils/date';
 import { Music, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { editMessage, deleteMessage } from '../services/api';
+import { ChatLinkPreview } from './ui/chat-link-preview';
+
+// Function to detect URLs in text
+const findUrls = (text: string): string[] => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.match(urlRegex) || [];
+};
 
 interface ChatMessageProps {
   message: Message;
@@ -32,6 +39,10 @@ export function ChatMessage({
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
+
+  // Extract URLs from message content
+  const urls = findUrls(message.content);
+  const hasUrl = urls.length > 0;
 
   const handleEdit = async () => {
     try {
@@ -64,7 +75,7 @@ export function ChatMessage({
   return (
     <div className={`flex items-start gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
       <Avatar user={sender} size="sm" />
-      <div className={`flex flex-col ${isOwnMessage ? 'items-end' : ''} max-w-[70%]`}>
+      <div className={`flex flex-col ${isOwnMessage ? 'items-end' : ''} max-w-[70%`}>
         <div className="relative group">
           {(isOwnMessage || isGroupAdmin) && (
             <button
@@ -138,6 +149,12 @@ export function ChatMessage({
             </div>
           )}
         </div>
+        
+        {/* URL Preview Section */}
+        {hasUrl && !isEditing && (
+          <ChatLinkPreview url={urls[0]} />
+        )}
+        
         {message.image && isImageFile(message.image) && (
           <img
             src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/media-files/${message.image}`}
@@ -162,7 +179,7 @@ export function ChatMessage({
           </div>
         )}
         <span className="text-xs text-gray-500 mt-2">
-          {message.createdAt ? formatDistanceToNow(new Date(message.createdAt)) : ''}
+          {message.created_at ? formatDistanceToNow(new Date(message.created_at)) : ''}
         </span>
       </div>
     </div>
